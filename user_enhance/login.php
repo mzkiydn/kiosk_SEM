@@ -41,7 +41,7 @@
             Your Password: <input type="password" name="password" placeholder="Password" required />
           </div>
         </div>
-        <!-- <div class="row">
+        <div class="row">
           <div class="col mb-3">
             <select class="form-select" id="userType" aria-label="Default select example" name="userType">
               <option value="" selected>Open this select menu</option>
@@ -49,7 +49,7 @@
               <option id="Vendor" value="Vendor">Vendor</option>
             </select>
           </div>
-        </div> -->
+        </div>
         <div class="row">
           <div class="col mb-3">
             <input name="submit" type="submit" value="Login" />

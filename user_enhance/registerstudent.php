@@ -25,44 +25,21 @@
     $fullName = $_POST['fullName'];
     $phoneNum = $_POST['phoneNum'];
 
-    // Check if username exists in user or vendor table
-    $checkUser = mysqli_query($conn, "SELECT 1 FROM user WHERE UserName = '$username' LIMIT 1");
-    $checkVendor = mysqli_query($conn, "SELECT 1 FROM vendor WHERE VendorUsername = '$username' LIMIT 1");
+    $query = mysqli_query($conn, "INSERT INTO user (UserName, Password, FullName, Email, NumPhone, UserType) VALUES ('$username','$password', '$fullName','$email','$phoneNum','Customer')");
 
-    if (mysqli_num_rows($checkUser) > 0 || mysqli_num_rows($checkVendor) > 0) {
+    if ($query) {
+
+      $userid = mysqli_insert_id($conn);
+
+      //QR
+      // $pathQr = './assets/img/qr/';
+      // $qrCode = $pathQr.$userid.".png";
+      // QRcode::png("http://localhost/food-kiosk-management-system/test.php?UserID=".$userid, $qrCode, 'H', 4, 4);
+      // $qrImage = base64_encode(file_get_contents(addslashes($qrCode)));
+
+      // $queryQR = mysqli_query($conn, "UPDATE user SET UserQR = '$qrImage' WHERE UserID = '$userid'");
+
       echo '
-<script type="text/javascript">
-$(document).ready(function(){
-  Swal.fire({
-    title: "Username already exists!",
-    text: "Please choose a different username.",
-    icon: "error",
-    timer: 2000,
-    showConfirmButton: false,
-  });
-});
-</script>
-      ';
-    } else {
-
-      $query = mysqli_query($conn, "INSERT INTO user (UserName, Password, FullName, Email, NumPhone, UserType) VALUES ('$username','$password', '$fullName','$email','$phoneNum','Customer')");
-
-      if ($query) {
-
-        $userid = mysqli_insert_id($conn);
-
-        //QR (optional, safe to skip if GD not installed)
-        try {
-          $pathQr = './assets/img/qr/';
-          $qrCode = $pathQr . $userid . ".png";
-          QRcode::png("http://localhost/food-kiosk-management-system/test.php?UserID=" . $userid, $qrCode, 'H', 4, 4);
-          $qrImage = base64_encode(file_get_contents(addslashes($qrCode)));
-          $queryQR = mysqli_query($conn, "UPDATE user SET UserQR = '$qrImage' WHERE UserID = '$userid'");
-        } catch (Exception $e) {
-          error_log("QR code generation failed: " . $e->getMessage());
-        }
-
-        echo '
 <script type="text/javascript">
 $(document).ready(function(){
 Swal.fire({
@@ -74,10 +51,11 @@ Swal.fire({
   window.location.href="login.php";
 });
 });
+
 </script>
-        ';
-      } else {
-        echo '
+    ';
+    } else {
+      echo '
 <script type="text/javascript">
       $(document).ready(function(){
         Swal.fire({
@@ -91,8 +69,7 @@ Swal.fire({
         });
       });
     </script>
-     ';
-      }
+   ';
     }
   }
   ?>

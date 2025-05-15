@@ -4,64 +4,58 @@ session_start();
 require_once('../includes/connect.php');
 
 if (isset($_POST['submit'])) {
+    $username = $_POST['username'];
+    $password = $_POST['password'];
 
-    $Admin = "Admin";
+    // 1. Try to find user in user table (Admin or Customer)
+    $queryUser = "SELECT * FROM user WHERE UserName='$username' AND Password='$password' LIMIT 1";
+    $resultUser = mysqli_query($conn, $queryUser);
 
-    if($_POST['userType'] == ""){
+    if ($rowUser = mysqli_fetch_assoc($resultUser)) {
+        $_SESSION['User'] = $rowUser['UserID'];
 
-        $query = "SELECT * FROM user WHERE UserName='" . $_POST['username'] . "' AND Password='" . $_POST['password'] . "' AND UserType ='$Admin'";
-        $result = mysqli_query($conn, $query);
-
-        if ($row = mysqli_fetch_assoc($result)) {
-            $_SESSION['User'] = $row['UserID'];
-
+        if ($rowUser['UserType'] == "Admin") {
             $_SESSION['Role'] = 3;
             header("location:../admin/admin_dashboard.php");
-            
+            exit();
+        } else if ($rowUser['UserType'] == "Customer") {
+            $_SESSION['Role'] = 2;
+            header("location:../user/displayKiosk.php");
+            exit();
         } else {
+            // Unknown user type in user table
             echo "<script>alert('Invalid Login'); window.location='../login.php';</script>";
-        }
-
-
-    }else if ($_POST['userType'] == "Vendor") {
-        $query = "select * from vendor where VendorEmail='" . $_POST['username'] . "' and VendorPassword='" . $_POST['password'] . "'";
-        $result = mysqli_query($conn, $query);
-
-        if ($row = mysqli_fetch_assoc($result)) {
-            if ($row['ApprovalStatus'] == "Pending") {
-                echo "<script>alert('Your application is being review. Try again later.'); window.location='../login.php';</script>";
-            } else {
-                $_SESSION['User'] = $row['VendorID'];
-                $_SESSION['Role'] = 1;
-                $_SESSION['KioskID'] = $row['KioskID'];
-                header("location:../Kiosk/kiosk_dashboard.php");
-            }
-        } else {
-            echo "<script>alert('Invalid Login'); window.location='../login.php';</script>";
-        }
-    } else if ($_POST['userType'] == "Customer") {
-        $query = "select * from user where UserName='" . $_POST['username'] . "' and Password='" . $_POST['password'] . "' and UserType='".$_POST['userType']."' ";
-        $result = mysqli_query($conn, $query);
-
-        if ($row = mysqli_fetch_assoc($result)) {
-            $_SESSION['User'] = $row['UserID'];
-
-            if ($row['UserType'] == "Customer") {
-                $_SESSION['Role'] = 2;
-                header("location:../user/displayKiosk.php");
-            }
-
-        } else {
-            echo "<script>alert('Invalid Login'); window.location='../login.php';</script>";
+            exit();
         }
     }
-} else if(isset($_POST['guest'])){
 
+    // 2. If not found in user, try vendor table
+    $queryVendor = "SELECT * FROM vendor WHERE VendorUsername='$username' AND VendorPassword='$password' LIMIT 1";
+    $resultVendor = mysqli_query($conn, $queryVendor);
+
+    if ($rowVendor = mysqli_fetch_assoc($resultVendor)) {
+        if ($rowVendor['ApprovalStatus'] == "Pending") {
+            echo "<script>alert('Your application is being review. Try again later.'); window.location='../login.php';</script>";
+            exit();
+        } else {
+            $_SESSION['User'] = $rowVendor['VendorID'];
+            $_SESSION['Role'] = 1;
+            $_SESSION['KioskID'] = $rowVendor['KioskID'];
+            header("location:../Kiosk/kiosk_dashboard.php");
+            exit();
+        }
+    }
+
+    // 3. Not found in either table
+    echo "<script>alert('Invalid Login'); window.location='../login.php';</script>";
+    exit();
+
+} else if(isset($_POST['guest'])) {
     $_SESSION['User'] = 22;
     $_SESSION['Role'] = 2;
     header("location:../user/displayKiosk.php");
-    
-} else{
+    exit();
+} else {
     echo 'Not Working Now Guys';
 }
 
