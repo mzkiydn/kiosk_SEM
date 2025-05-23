@@ -3,19 +3,6 @@ session_start();
 //error_reporting(0);
 include('../includes/connect.php');
 include('../functions/functions.php');
-
-if (isset($_GET['mode']) && $_GET['mode'] == "delete" && isset($_GET['id'])) {
-    $id = intval($_GET['id']);
-    // Unassign all vendors from this kiosk first
-    mysqli_query($conn, "UPDATE vendor SET KioskID = NULL, ApprovalStatus = 'Approved' WHERE KioskID = $id");
-    $query = "DELETE FROM `kiosk` WHERE `KioskID` = $id";
-    $result = mysqli_query($conn, $query);
-
-    // Always redirect back to manageKiosk.php after delete
-    header("Location: manageKiosk.php");
-    exit();
-}
-
 if (!isset($_SESSION['User'])) {
     header('location:../login.php');
 } else {
@@ -58,7 +45,6 @@ if (!isset($_SESSION['User'])) {
                                                 <th>Kiosk Name</th>
                                                 <th>Operation Status</th>
                                                 <th>Kiosk Number</th>
-                                                <th>Assigned Vendor</th> 
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
@@ -71,32 +57,19 @@ if (!isset($_SESSION['User'])) {
                                             );
                                             while ($row = mysqli_fetch_array($ret)) {
                                                 $i++;
-                                                // Find assigned vendor for this kiosk
-                                                $kioskID = $row['KioskID'];
-                                                $vendorQuery = mysqli_query($conn, "SELECT VendorName FROM vendor WHERE KioskID = '$kioskID' AND ApprovalStatus = 'Assigned' LIMIT 1");
-                                                $vendorRow = mysqli_fetch_assoc($vendorQuery);
-                                                $assignedVendor = $vendorRow ? $vendorRow['VendorName'] : '';
                                             ?>
                                                 <tr id="<?php echo $row['KioskID'] ?>">
                                                     <th scope="row"><?php echo $i; ?></th>
                                                     <td><?php echo $row['KioskName']; ?></td>
-                                                    <td><?php echo $row['OperationStatus']; ?></td>
-                                                    <td><?php echo $row['KioskNum']; ?></td>
                                                     <td>
                                                         <?php
-                                                        if ($row['OperationStatus'] == 'Pending') {
-                                                            // Find vendor who requested this kiosk (ApprovalStatus = 'Requested')
-                                                            $pendingVendorQuery = mysqli_query($conn, "SELECT VendorName FROM vendor WHERE KioskID = '{$row['KioskID']}' AND ApprovalStatus = 'Requested' LIMIT 1");
-                                                            $pendingVendor = mysqli_fetch_assoc($pendingVendorQuery);
-                                                            echo $pendingVendor ? '<span class="text-warning">' . htmlspecialchars($pendingVendor['VendorName']) . ' (Requested)</span>' : '-';
-                                                        } else {
-                                                            echo htmlspecialchars($assignedVendor);
-                                                        }
+                                                        echo $row['OperationStatus'];
                                                         ?>
-                                                    </td> 
+                                                    </td>
+                                                    <td><?php echo $row['KioskNum']; ?></td>
                                                     <td>
-                                                        <form method="post" style="display:inline;">
-                                                            <div class="dropdown" style="display:inline;">
+                                                        <form method="post">
+                                                            <div class="dropdown">
                                                                 <button type="button" class="btn p-0 dropdown-toggle hide-arrow" data-bs-toggle="dropdown">
                                                                     <i class="bx bx-dots-vertical-rounded"></i>
                                                                 </button>
@@ -105,16 +78,9 @@ if (!isset($_SESSION['User'])) {
                                                                         <i class="bx bx-edit-alt me-1"></i>
                                                                         Edit
                                                                     </a>
-                                                                    <a class="dropdown-item" href="manageKiosk.php?mode=delete&id=<?php echo $row['KioskID']; ?>">
-                                                                        <i class="bx bx-trash me-1"></i> Delete
-                                                                    </a>
+                                                                    <a class="dropdown-item del" data-id="<?php echo $row['KioskID']; ?>" href="javascript:void(0);"><i class="bx bx-trash me-1"></i> Delete</a>
                                                                 </div>
                                                             </div>
-                                                            <?php if ($row['OperationStatus'] == 'Pending') { ?>
-                                                                <input type="hidden" name="pendingKioskID" value="<?php echo $row['KioskID']; ?>">
-                                                                <button type="submit" name="acceptKioskRequest" class="btn btn-success btn-sm" style="margin-left:5px;">Accept</button>
-                                                                <button type="submit" name="rejectKioskRequest" class="btn btn-danger btn-sm" style="margin-left:2px;">Reject</button>
-                                                            <?php } ?>
                                                         </form>
                                                     </td>
                                                 </tr>
@@ -146,36 +112,15 @@ if (!isset($_SESSION['User'])) {
                                     <label for="kioskname" class="form-label">Kiosk Name</label>
                                     <input type="text" id="kioskname" name="kioskname" class="form-control" placeholder="Enter Name" value="" />
                                 </div>
-                            </div>
-                            <div class="row">
                                 <div class="col mb-3">
                                     <label for="operationstatus" class="form-label">Operation Status</label>
-                                    <select id="operationstatus" name="operationstatus" class="form-control">
-                                        <option value="Available">Available</option>
-                                        <option value="Open">Open</option>
-                                        <option value="Closed">Closed</option>
-                                    </select>
+                                    <input type="text" id="operationstatus" name="operationstatus" class="form-control" placeholder="Enter Status" value="" />
                                 </div>
                             </div>
                             <div class="row">
                                 <div class="col mb-3">
                                     <label for="kiosknum" class="form-label">Kiosk Number</label>
                                     <input type="text" id="kiosknum" name="kiosknum" class="form-control" placeholder="Enter Kiosk Number" value="" />
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col mb-3">
-                                    <label class="form-label">Assigned Vendor</label>
-                                    <select id="assignedVendorAdd" name="assignedVendorAdd" class="form-control">
-                                        <option value="">-</option>
-                                        <?php
-                                        // List all vendors with ApprovalStatus = 'Approved'
-                                        $vendorList = mysqli_query($conn, "SELECT VendorID, VendorName FROM vendor WHERE ApprovalStatus = 'Approved'");
-                                        while ($v = mysqli_fetch_assoc($vendorList)) {
-                                            echo '<option value="' . $v['VendorID'] . '">' . htmlspecialchars($v['VendorName']) . '</option>';
-                                        }
-                                        ?>
-                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -207,32 +152,13 @@ if (!isset($_SESSION['User'])) {
                                 </div>
                                 <div class="col mb-3">
                                     <label for="statusEdit" class="form-label">Operation Status</label>
-                                    <select id="statusEdit" name="statusEdit" class="form-control">
-                                        <option value="Available">Available</option>
-                                        <option value="Open">Open</option>
-                                        <option value="Closed">Closed</option>
-                                    </select>
+                                    <input type="text" id="statusEdit" name="statusEdit" class="form-control" placeholder="Enter Status" value="" />
                                 </div>
                             </div>
                             <div class="row">
                                 <div class="col mb-3">
                                     <label for="kiosknumEdit" class="form-label">Kiosk Number</label>
-                                    <input type="text" id="kiosknumEdit" name="kiosknumEdit" class="form-control" placeholder="Enter Kiosk Number" value="" readonly />
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col mb-3">
-                                    <label class="form-label">Assigned Vendor</label>
-                                    <select id="assignedVendorEdit" name="assignedVendorEdit" class="form-control">
-                                        <option value="">-</option>
-                                        <?php
-                                        // List all vendors with ApprovalStatus = 'Approved'
-                                        $vendorList = mysqli_query($conn, "SELECT VendorID, VendorName FROM vendor WHERE ApprovalStatus = 'Approved'");
-                                        while ($v = mysqli_fetch_assoc($vendorList)) {
-                                            echo '<option value="' . $v['VendorID'] . '">' . htmlspecialchars($v['VendorName']) . '</option>';
-                                        }
-                                        ?>
-                                    </select>
+                                    <input type="text" id="kiosknumEdit" name="kiosknumEdit" class="form-control" placeholder="Enter Kiosk Number" value="" />
                                 </div>
                             </div>
                             <input hidden type="text" id="kioskIDEdit" name="kioskIDEdit" class="form-control" placeholder="" value="" />
@@ -255,42 +181,31 @@ if (!isset($_SESSION['User'])) {
             $(".opn").click(function() {
                 id = $(this).data('id');
                 var col = $("#".concat(id, " > td"));
+                console.log(col[2].innerText);
+
                 $("#id").val(id);
                 $("#kiosknameEdit").val(col[0].innerText);
-                $("#statusEdit").val(col[1].innerText.trim());
+                $("#statusEdit").val(col[1].innerText);
                 $("#kiosknumEdit").val(col[2].innerText);
                 $("#kioskIDEdit").val(id);
+            });
 
-                // AJAX to get assigned vendor for this kiosk (returns VendorID or empty)
-                $.ajax({
-                    url: "getAssignedVendorID.php",
-                    method: "POST",
-                    data: { kioskID: id },
-                    success: function(response) {
-                        $("#assignedVendorEdit").val(response);
-                    },
-                    error: function() {
-                        $("#assignedVendorEdit").val("");
+            $(".del").click(function() {
+                id = $(this).data('id');
+                Swal.fire({
+                    title: "Are you sure?",
+                    text: "You won't be able to revert this!",
+                    con: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#3085d6",
+                    cancelButtonColor: "#d33",
+                    confirmButtonText: "Yes, delete it!"
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.replace("manageKiosk.php?mode=delete&id=" + id);
                     }
                 });
             });
-
-            $(document).on('click', '.del', function() {
-    var id = $(this).data('id');
-    Swal.fire({
-        title: "Are you sure?",
-        text: "You won't be able to revert this!",
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonColor: "#3085d6",
-        cancelButtonColor: "#d33",
-        confirmButtonText: "Yes, delete it!"
-    }).then((result) => {
-        if (result.isConfirmed) {
-            window.location.replace("manageKiosk.php?mode=delete&id=" + id);
-        }
-    });
-});
 
             $(document).ready(function() {
                 $('#kioskTable').dataTable({
@@ -311,24 +226,6 @@ if (!isset($_SESSION['User'])) {
                 document.getElementById('formFile').value = null;
                 frame.src = "";
             }
-
-            $('#assignedVendorAdd').on('change', function() {
-    if ($(this).val() === "") {
-        $('#operationstatus').html('<option value="Available" selected>Available</option>');
-    } else {
-        $('#operationstatus').html('<option value="Open">Open</option><option value="Closed">Closed</option>');
-        $('#operationstatus').val('Open');
-    }
-});
-
-$('#assignedVendorEdit').on('change', function() {
-    if ($(this).val() === "") {
-        $('#statusEdit').html('<option value="Available" selected>Available</option>');
-    } else {
-        $('#statusEdit').html('<option value="Open">Open</option><option value="Closed">Closed</option>');
-        $('#statusEdit').val('Open');
-    }
-});
         </script>
         <script src="../assets/js/dashboards-analytics.js"></script>
     </body>
@@ -338,25 +235,14 @@ $('#assignedVendorEdit').on('change', function() {
     <!-- CRUD Function Comment-->
     <?php
     if (isset($_POST['addBtn'])) {
+
         $kioskname = $_POST['kioskname'];
         $operationstatus = $_POST['operationstatus'];
         $kiosknum = $_POST['kiosknum'];
-        $assignedVendorID = $_POST['assignedVendorAdd'];
-
-        // Enforce logic in backend
-        if (empty($assignedVendorID)) {
-            $operationstatus = 'Available';
-        } else if ($operationstatus != 'Open' && $operationstatus != 'Closed') {
-            $operationstatus = 'Open';
-        }
 
         $query = mysqli_query($conn, "INSERT INTO kiosk (KioskName, OperationStatus, KioskNum) VALUES ('$kioskname','$operationstatus', '$kiosknum')");
 
         if ($query) {
-            $newKioskID = mysqli_insert_id($conn);
-            if (!empty($assignedVendorID)) {
-                mysqli_query($conn, "UPDATE vendor SET KioskID='$newKioskID', ApprovalStatus='Assigned' WHERE VendorID='$assignedVendorID'");
-            }
             echo '
       <script type="text/javascript">
       $(document).ready(function(){
@@ -369,6 +255,7 @@ $('#assignedVendorEdit').on('change', function() {
           window.location.href="manageKiosk.php";
         });
       });
+
       </script>
             ';
         } else {
@@ -391,27 +278,13 @@ $('#assignedVendorEdit').on('change', function() {
     }
 
     if (isset($_POST['editBtn'])) {
+
         $kioskname = $_POST['kiosknameEdit'];
         $operationstatus = $_POST['statusEdit'];
         $kiosknum = $_POST['kiosknumEdit'];
         $kioskid = $_POST['kioskIDEdit'];
-        $assignedVendorID = $_POST['assignedVendorEdit'];
-
-        // Enforce logic in backend
-        if (empty($assignedVendorID)) {
-            $operationstatus = 'Available';
-        } else if ($operationstatus != 'Open' && $operationstatus != 'Closed') {
-            $operationstatus = 'Open';
-        }
 
         $query = mysqli_query($conn, "UPDATE kiosk SET KioskName='$kioskname', OperationStatus='$operationstatus', KioskNum='$kiosknum' WHERE KioskID='$kioskid'");
-
-        // Unassign any vendor currently assigned to this kiosk
-        mysqli_query($conn, "UPDATE vendor SET KioskID=NULL, ApprovalStatus='Approved' WHERE KioskID='$kioskid' AND ApprovalStatus='Assigned'");
-        // Assign the selected vendor if any
-        if (!empty($assignedVendorID)) {
-            mysqli_query($conn, "UPDATE vendor SET KioskID='$kioskid', ApprovalStatus='Assigned' WHERE VendorID='$assignedVendorID'");
-        }
 
         if ($query) {
             echo '
@@ -426,8 +299,9 @@ $('#assignedVendorEdit').on('change', function() {
           window.location.href="manageKiosk.php";
         });
       });
+
       </script>
-        ';
+            ';
         } else {
             echo '
       <script type="text/javascript">
@@ -447,38 +321,47 @@ $('#assignedVendorEdit').on('change', function() {
         }
     }
 
-    if (isset($_POST['acceptKioskRequest'])) {
-    $kioskID = intval($_POST['pendingKioskID']);
-    // Assign the vendor (ApprovalStatus = 'Requested') to this kiosk
-    $vendorQuery = mysqli_query($conn, "SELECT VendorID FROM vendor WHERE KioskID = '$kioskID' AND ApprovalStatus = 'Requested' LIMIT 1");
-    if ($vendorRow = mysqli_fetch_assoc($vendorQuery)) {
-        $vendorID = $vendorRow['VendorID'];
-        // Set this vendor as assigned, set kiosk to Open
-        mysqli_query($conn, "UPDATE vendor SET ApprovalStatus = 'Assigned' WHERE VendorID = '$vendorID'");
-        mysqli_query($conn, "UPDATE kiosk SET OperationStatus = 'Open' WHERE KioskID = '$kioskID'");
-    }
-    echo '<script>
-        Swal.fire({title:"Request Accepted!",icon:"success"}).then(function(){window.location.href="manageKiosk.php";});
-    </script>';
-    exit();
-}
+    // Delete Function
+    if (isset($_GET['mode'])) {
+        if ($_GET['mode'] == "delete") {
+            $id = $_GET['id'];
+            $query = "DELETE from `user` WHERE `UserID` = $id";
+            $result = mysqli_query($conn, $query);
 
-if (isset($_POST['rejectKioskRequest'])) {
-    $kioskID = intval($_POST['pendingKioskID']);
-    // Find the vendor who requested
-    $vendorQuery = mysqli_query($conn, "SELECT VendorID FROM vendor WHERE KioskID = '$kioskID' AND ApprovalStatus = 'Requested' LIMIT 1");
-    if ($vendorRow = mysqli_fetch_assoc($vendorQuery)) {
-        $vendorID = $vendorRow['VendorID'];
-        // Set vendor status to Rejected and unassign kiosk
-        mysqli_query($conn, "UPDATE vendor SET ApprovalStatus = 'Rejected' WHERE VendorID = '$vendorID'");
-        // Set kiosk status to Available
-        mysqli_query($conn, "UPDATE kiosk SET OperationStatus = 'Available' WHERE KioskID = '$kioskID'");
+            if ($result) {
+                echo '<script type="text/javascript">
+              Swal.fire({
+                title: "Deleted!",
+                text: "The user has been deleted.",
+                icon: "success",
+                confirmButtonText: "OK"
+              }).then((result) => {
+                if (result.isConfirmed) {
+                  window.location.href="manageKiosk.php";
+                }
+              });
+            </script>';
+            } else {
+                echo '
+            <script type="text/javascript">
+            $(document).ready(function() {
+              Swal.fire({
+                icon: "error",
+                title: "Oops...",
+                text: "Something went wrong!",
+                confirmButtonText: "Back"
+                }).then((result) => {
+                  if (result.isConfirmed) {
+                    window.location.href="manageKiosk.php";
+                  }
+                });
+              });
+            </script>
+            ';
+            }
+        }
     }
-    echo '<script>
-        Swal.fire({title:"Request Rejected!",icon:"info"}).then(function(){window.location.href="manageKiosk.php";});
-    </script>';
-    exit();
-}
+
     //Retrieve image from database and display it on html webpage
     function displayImageFromDatabase()
     {

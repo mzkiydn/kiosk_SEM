@@ -26,7 +26,6 @@ if ($row && ($role == 2 || $role == 3)) {
     if ($row && $role == 1) {
         $userType = 'Vendor';
         // Get operation status if exists
-        $operationStatus = isset($row['OperationStatus']) ? $row['OperationStatus'] : '';
         $VendorName = isset($row['VendorName']) ? $row['VendorName'] : '';
         $VendorEmail = isset($row['VendorEmail']) ? $row['VendorEmail'] : '';
         $VendorNum = isset($row['VendorNum']) ? $row['VendorNum'] : '';
@@ -65,6 +64,7 @@ if ($row && ($role == 2 || $role == 3)) {
             <h4 class="fw-bold py-2 mb-2"><span class="text-muted fw-light">Account Settings /</span> Account</h4>
             <div class="row">
               <div class="col-md-12">
+                <!-- Profile Settings Card -->
                 <div class="card mb-4">
                   <h5 class="card-header">Profile Details</h5>
                   
@@ -118,13 +118,6 @@ if ($row && ($role == 2 || $role == 3)) {
                           <label for="password" class="form-label">Password</label>
                           <input class="form-control" type="password" id="password" name="password" value="<?php echo $row['VendorPassword']; ?>" />
                         </div>
-                        <div class="mb-3 col-md-6">
-                          <label for="operationStatus" class="form-label">Kiosk Operation Status</label>
-                          <select class="form-control" id="operationStatus" name="operationStatus">
-                            <option value="Open" <?php if(isset($operationStatus) && $operationStatus == "Open") echo "selected"; ?>>Open</option>
-                            <option value="Closed" <?php if(isset($operationStatus) && $operationStatus == "Closed") echo "selected"; ?>>Closed</option>
-                          </select>
-                        </div>
                         <?php if (!empty($row['VendorQR'])) { ?>
                         <div class="mb-3 col-md-6">
                           <label for="qr" class="form-label">QR Code</label>
@@ -140,7 +133,93 @@ if ($row && ($role == 2 || $role == 3)) {
                     </form>
                   </div>
                 </div>
-                <div class="card mb-4"></div>
+                <!-- Kiosk Management Card (for Vendor only) -->
+                <?php if ($userType == "Vendor") { ?>
+                <div class="card mb-4">
+                  <h5 class="card-header">Kiosk Management</h5>
+                  <div class="card-body">
+                    <?php
+                    $vendorID = $uid;
+                    $vendor = mysqli_fetch_assoc(mysqli_query($conn, "SELECT KioskID, ApprovalStatus FROM vendor WHERE VendorID = '$vendorID'"));
+                    $kioskID = $vendor['KioskID'];
+                    $approvalStatus = $vendor['ApprovalStatus'];
+
+                    if ($approvalStatus == 'Pending') {
+                      echo '<div class="alert alert-info">Your account is pending admin approval. You cannot request a kiosk yet.</div>';
+                    } elseif ($approvalStatus == 'Approved') {
+                      // Show request form
+                      $availableKiosks = mysqli_query($conn, "SELECT KioskID, KioskNum FROM kiosk WHERE OperationStatus = 'Available'");
+                      ?>
+                      <form method="post">
+                        <div class="mb-3">
+                          <label class="form-label">Request Kiosk</label>
+                          <select class="form-control" name="requestKioskID" required>
+                            <option value="">-- Select Available Kiosk --</option>
+                            <?php while ($k = mysqli_fetch_assoc($availableKiosks)) { ?>
+                              <option value="<?php echo $k['KioskID']; ?>"><?php echo htmlspecialchars($k['KioskNum']); ?></option>
+                            <?php } ?>
+                          </select>
+                        </div>
+                        <button type="submit" name="requestKioskBtn" class="btn btn-success">Request Kiosk</button>
+                      </form>
+                      <?php
+                    } elseif ($approvalStatus == 'Requested' && $kioskID) {
+                      // Show request status in a table
+                      $kiosk = mysqli_fetch_assoc(mysqli_query($conn, "SELECT KioskNum FROM kiosk WHERE KioskID = '$kioskID'"));
+                      ?>
+                      <h6>Your Kiosk Request</h6>
+                      <table class="table">
+                        <thead>
+                          <tr>
+                            <th>Kiosk Number</th>
+                            <th>Approval Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><?php echo htmlspecialchars($kiosk['KioskNum']); ?></td>
+                            <td><?php echo htmlspecialchars($approvalStatus); ?></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <?php
+                    } elseif ($approvalStatus == 'Assigned' && $kioskID) {
+                      $kiosk = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM kiosk WHERE KioskID = '$kioskID'"));
+                      ?>
+                      <h6>Assigned Kiosk Details</h6>
+                      <form method="post" style="display:inline;">
+                        <div class="mb-3">
+                          <label class="form-label">Kiosk Number</label>
+                          <input type="text" class="form-control" value="<?php echo htmlspecialchars($kiosk['KioskNum']); ?>" readonly>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label">Kiosk Name</label>
+                          <input type="text" class="form-control" name="kioskNameUpdate" value="<?php echo htmlspecialchars($kiosk['KioskName']); ?>" required>
+                        </div>
+                        <div class="mb-3">
+                          <label class="form-label">Operation Status</label>
+                          <select class="form-control" name="kioskStatusUpdate">
+                            <option value="Open" <?php if($kiosk['OperationStatus'] == 'Open') echo 'selected'; ?>>Open</option>
+                            <option value="Closed" <?php if($kiosk['OperationStatus'] == 'Closed') echo 'selected'; ?>>Closed</option>
+                          </select>
+                        </div>
+                        <button type="submit" name="updateKioskBtn" class="btn btn-primary">Update Kiosk</button>
+                        <button type="submit" name="dropKioskBtn" class="btn btn-danger" onclick="return confirm('Are you sure you want to drop this kiosk?');">Drop Kiosk</button>
+                      </form>
+                      <?php
+                    } elseif ($approvalStatus == 'Rejected' && $kioskID) {
+                      $kiosk = mysqli_fetch_assoc(mysqli_query($conn, "SELECT KioskNum FROM kiosk WHERE KioskID = '$kioskID'"));
+                      ?>
+                      <div class="alert alert-danger">Your kiosk request for Kiosk Number <?php echo htmlspecialchars($kiosk['KioskNum']); ?> was rejected.</div>
+                      <form method="post">
+                        <button type="submit" name="resetKioskRequestBtn" class="btn btn-warning">Request New Kiosk</button>
+                      </form>
+                      <?php
+                    }
+                    ?>
+                  </div>
+                </div>
+                <?php } ?>
                 <div class="card">
                   <h5 class="card-header">Delete Account</h5>
                   <div class="card-body">
@@ -284,14 +363,13 @@ if (isset($_POST['editBtn'])) {
         $email = $_POST['email'];
         $phoneNumber = $_POST['phoneNumber'];
         $newPassword = $_POST['password'];
-        $operationStatus = isset($_POST['operationStatus']) ? $_POST['operationStatus'] : '';
 
         // Always fetch the real password from DB for comparison
         $getPass = mysqli_query($conn, "SELECT VendorPassword FROM vendor WHERE VendorID = '$uid' LIMIT 1");
         $rowPass = mysqli_fetch_assoc($getPass);
 
         if ($rowPass && $currentPassword === $rowPass['VendorPassword']) {
-            $query = mysqli_query($conn, "UPDATE vendor SET VendorName = '$vendorName', VendorEmail = '$email', VendorNum = '$phoneNumber', VendorPassword = '$newPassword', OperationStatus = '$operationStatus' WHERE VendorID = '$uid'");
+            $query = mysqli_query($conn, "UPDATE vendor SET VendorName = '$vendorName', VendorEmail = '$email', VendorNum = '$phoneNumber', VendorPassword = '$newPassword' WHERE VendorID = '$uid'");
             if ($query) {
                 echo '
                 <script type="text/javascript">
@@ -384,6 +462,88 @@ if (isset($_POST['deactiveBtn'])) {
         </script>
         ';
   }
+}
+
+if (isset($_POST['requestKioskBtn']) && $userType == "Vendor") {
+    $requestKioskID = intval($_POST['requestKioskID']);
+    // Update vendor and kiosk tables
+    mysqli_query($conn, "UPDATE vendor SET ApprovalStatus = 'Requested', KioskID = '$requestKioskID' WHERE VendorID = '$uid'");
+    mysqli_query($conn, "UPDATE kiosk SET OperationStatus = 'Pending' WHERE KioskID = '$requestKioskID'");
+    $_SESSION['kiosk_request'] = 'sent';
+    echo '<script>
+      Swal.fire({
+        title: "Request Submitted!",
+        text: "Your kiosk request has been sent.",
+        icon: "success"
+      }).then(function(){ window.location.href="profile.php"; });
+    </script>';
+    exit();
+}
+
+// Handle Update Kiosk (for Assigned)
+if (isset($_POST['updateKioskBtn']) && $userType == "Vendor") {
+    $vendor = mysqli_fetch_assoc(mysqli_query($conn, "SELECT KioskID FROM vendor WHERE VendorID = '$uid'"));
+    $kioskID = $vendor['KioskID'];
+    // Only update if kioskID is set and fields are present
+    if ($kioskID && isset($_POST['kioskNameUpdate'], $_POST['kioskStatusUpdate'])) {
+        $kioskName = mysqli_real_escape_string($conn, $_POST['kioskNameUpdate']);
+        $kioskStatus = $_POST['kioskStatusUpdate'];
+        $update = mysqli_query($conn, "UPDATE kiosk SET KioskName = '$kioskName', OperationStatus = '$kioskStatus' WHERE KioskID = '$kioskID'");
+        if ($update) {
+            echo '<script>
+              Swal.fire({
+                title: "Kiosk Updated!",
+                icon: "success"
+              }).then(function(){ window.location.href="profile.php"; });
+            </script>';
+        } else {
+            echo '<script>
+              Swal.fire({
+                title: "Update Failed!",
+                icon: "error"
+              }).then(function(){ window.location.href="profile.php"; });
+            </script>';
+        }
+        exit();
+    }
+}
+
+// Handle Drop Kiosk (for Assigned)
+if (isset($_POST['dropKioskBtn']) && $userType == "Vendor") {
+    $vendor = mysqli_fetch_assoc(mysqli_query($conn, "SELECT KioskID FROM vendor WHERE VendorID = '$uid'"));
+    $kioskID = $vendor['KioskID'];
+    if ($kioskID) {
+        mysqli_query($conn, "UPDATE kiosk SET OperationStatus = 'Available' WHERE KioskID = '$kioskID'");
+        mysqli_query($conn, "UPDATE vendor SET ApprovalStatus = 'Approved', KioskID = NULL WHERE VendorID = '$uid'");
+        echo '<script>
+          Swal.fire({
+            title: "Kiosk Dropped!",
+            text: "You have dropped your kiosk.",
+            icon: "success"
+          }).then(function(){ window.location.href="profile.php"; });
+        </script>';
+        exit();
+    }
+}
+
+// Handle Reset Kiosk Request (for Rejected)
+if (isset($_POST['resetKioskRequestBtn']) && $userType == "Vendor") {
+    $vendor = mysqli_fetch_assoc(mysqli_query($conn, "SELECT KioskID FROM vendor WHERE VendorID = '$uid'"));
+    $kioskID = $vendor['KioskID'];
+    if ($kioskID) {
+        // Set the rejected kiosk back to available
+        mysqli_query($conn, "UPDATE kiosk SET OperationStatus = 'Available' WHERE KioskID = '$kioskID'");
+        // Reset vendor status so they can request again
+        mysqli_query($conn, "UPDATE vendor SET ApprovalStatus = 'Approved', KioskID = NULL WHERE VendorID = '$uid'");
+        echo '<script>
+          Swal.fire({
+            title: "Reset Successful!",
+            text: "You can now request a new kiosk.",
+            icon: "success"
+          }).then(function(){ window.location.href="profile.php"; });
+        </script>';
+        exit();
+    }
 }
 ?>
 </html>
